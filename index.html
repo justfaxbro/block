@@ -114,14 +114,6 @@
 <script>
     const COLS = 8;
     const ROWS = 10;
-    // Responsive block size based on canvas size
-    function getBlockSize() {
-        const canvasW = Math.min(window.innerWidth * 0.95, 600);
-        const canvasH = Math.min(window.innerHeight * 0.85, canvasW * 1.1); // taller board
-        return Math.floor(Math.min(canvasW / COLS, canvasH / ROWS));
-    }
-    let BLOCK_SIZE = getBlockSize();
-    let PIECE_CANVAS_SIZE = 4 * BLOCK_SIZE;
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -135,17 +127,30 @@
     const gameOverScreen = document.getElementById('gameOverScreen');
     const finalScoreDisplay = document.getElementById('finalScore');
 
+    let BLOCK_SIZE;
+    let PIECE_CANVAS_SIZE;
+
     function resizeCanvas() {
-        BLOCK_SIZE = getBlockSize();
+        // Get the actual rendered size from CSS
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        // Calculate block size
+        BLOCK_SIZE = Math.floor(Math.min(canvas.width / COLS, canvas.height / ROWS));
+        // Centering offsets
+        window.boardOffsetX = Math.floor((canvas.width - (BLOCK_SIZE * COLS)) / 2);
+        window.boardOffsetY = Math.floor((canvas.height - (BLOCK_SIZE * ROWS)) / 2);
         PIECE_CANVAS_SIZE = 4 * BLOCK_SIZE;
-        canvas.width = COLS * BLOCK_SIZE;
-        canvas.height = ROWS * BLOCK_SIZE;
         pieceCanvases.forEach(pc => {
             pc.width = PIECE_CANVAS_SIZE;
             pc.height = PIECE_CANVAS_SIZE;
         });
-        drawBoard();
-        drawPiecePreviews();
+        if (typeof board !== 'undefined' && board) {
+            drawBoard();
+        }
+        if (typeof currentPieces !== 'undefined' && currentPieces) {
+            drawPiecePreviews();
+        }
     }
 
     // Initial canvas setup
@@ -210,11 +215,11 @@
         drawPiecePreviews();
     }
 
-    function drawBlock(ctxInstance, x, y, color, bSize = BLOCK_SIZE) {
+    function drawBlock(ctxInstance, x, y, color, bSize = BLOCK_SIZE, offsetX = 0, offsetY = 0) {
         ctxInstance.fillStyle = color;
-        ctxInstance.fillRect(x * bSize, y * bSize, bSize, bSize);
-        ctxInstance.strokeStyle = '#2c3e50'; // Darker border for blocks
-        ctxInstance.strokeRect(x * bSize, y * bSize, bSize, bSize);
+        ctxInstance.fillRect(offsetX + x * bSize, offsetY + y * bSize, bSize, bSize);
+        ctxInstance.strokeStyle = '#2c3e50';
+        ctxInstance.strokeRect(offsetX + x * bSize, offsetY + y * bSize, bSize, bSize);
     }
 
     function drawBoard() {
@@ -222,7 +227,7 @@
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 if (board[r][c]) {
-                    drawBlock(ctx, c, r, board[r][c]);
+                    drawBlock(ctx, c, r, board[r][c], BLOCK_SIZE, window.boardOffsetX, window.boardOffsetY);
                 }
             }
         }
@@ -396,7 +401,6 @@
         selectedPieceIndex = -1;
         gameOverScreen.style.display = 'none';
         generateNewPieces();
-        drawBoard();
         updateScoreDisplay();
     }
 
