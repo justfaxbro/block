@@ -4,6 +4,12 @@
 <title>Block Puzzle Game Test</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
+    html, body {
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        touch-action: none;
+    }
     body { 
         display: flex; 
         flex-direction: column; 
@@ -25,9 +31,9 @@
         background-color: #34495e; 
         margin-bottom: 20px;
         width: 95vw;
-        height: 70vh;
+        height: 85vh;
         max-width: 600px;
-        max-height: 80vw;
+        max-height: 95vw;
         display: block;
     }
     #scoreBoard { 
@@ -111,7 +117,7 @@
     // Responsive block size based on canvas size
     function getBlockSize() {
         const canvasW = Math.min(window.innerWidth * 0.95, 600);
-        const canvasH = Math.min(window.innerHeight * 0.7, canvasW * 0.8);
+        const canvasH = Math.min(window.innerHeight * 0.85, canvasW * 1.1); // taller board
         return Math.floor(Math.min(canvasW / COLS, canvasH / ROWS));
     }
     let BLOCK_SIZE = getBlockSize();
@@ -148,6 +154,9 @@
     window.addEventListener('orientationchange', () => {
         setTimeout(resizeCanvas, 100);
     });
+
+    // Prevent scrolling on touch devices
+    document.body.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
 
     let board;
     let score;
