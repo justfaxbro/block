@@ -1,4 +1,71 @@
-<!DOCTYPE html>
+function handleTouchMove(e) {
+            e.preventDefault(); // Prevent scrolling
+            
+            if (!selectedPiece) return;
+            
+            const touch = e.touches[0];
+            const boardRect = gameBoard.getBoundingClientRect();
+            const x = touch.clientX - boardRect.left;
+            const y = touch.clientY - boardRect.top;
+            
+            // Clear and redraw everything
+            drawBoard();
+            
+            // Calculate grid position for better alignment
+            const gridCol = Math.floor(x / BLOCK_SIZE);
+            const gridRow = Math.floor(y / BLOCK_SIZE);
+            
+            const shape = selectedPiece.shape;
+            
+            // Draw on exact grid positions
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[0].length; c++) {
+                    if (shape[r][c]) {
+                        const drawX = (gridCol + c) * BLOCK_SIZE;
+                        const drawY = (gridRow + r) * BLOCK_SIZE;
+                        
+                        // Draw with high contrast for better visibility
+                        ctx.fillStyle = selectedPiece.color;
+                        ctx.fillRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
+                        ctx.lineWidth = 1;
+                    }
+                }
+            }
+            
+            console.log("Touch move at", gridRow, gridCol);
+        }
+        
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            
+            if (!selectedPiece) return;
+            
+            const touch = e.changedTouches[0];
+            const boardRect = gameBoard.getBoundingClientRect();
+            const x = touch.clientX - boardRect.left;
+            const y = touch.clientY - boardRect.top;
+            
+            // Convert to grid coordinates
+            const col = Math.floor(x / BLOCK_SIZE);
+            const row = Math.floor(y / BLOCK_SIZE);
+            
+            console.log("Touch end at", row, col);
+            
+            // Try to place the piece
+            if (canPlacePiece(row, col)) {
+                placePiece(row, col);
+            }
+            
+            // Reset selection
+            selectedPiece = null;
+            
+            // Redraw
+            drawBoard();
+            drawPieces();
+        }<!DOCTYPE html>
 <html>
 <head>
     <title>Simple Block Puzzle</title>
@@ -118,11 +185,15 @@
         const finalScoreDisplay = document.getElementById('finalScore');
         const restartButton = document.getElementById('restartButton');
         
-        // Set canvas sizes
+        // Set canvas sizes based on device
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const blockSizeFactor = isMobile ? 0.8 : 1.0; // Slightly smaller on mobile
+        
         gameBoard.width = COLS * BLOCK_SIZE;
         gameBoard.height = ROWS * BLOCK_SIZE;
         
-        const PIECE_CANVAS_SIZE = 120;
+        // Make piece preview larger on mobile
+        const PIECE_CANVAS_SIZE = isMobile ? 100 : 120;
         pieceCanvases.forEach(canvas => {
             canvas.width = PIECE_CANVAS_SIZE;
             canvas.height = PIECE_CANVAS_SIZE;
@@ -173,21 +244,8 @@
             document.addEventListener('mouseup', handleMouseUp);
             
             // Touch events
-            gameBoard.addEventListener('touchmove', e => {
-                e.preventDefault(); // Prevent scrolling
-                if (selectedPiece) {
-                    const touch = e.touches[0];
-                    handleMouseMove(touch);
-                }
-            }, { passive: false });
-            
-            document.addEventListener('touchend', e => {
-                if (selectedPiece) {
-                    e.preventDefault(); // Prevent any default behavior
-                    const touch = e.changedTouches[0];
-                    handleMouseUp(touch);
-                }
-            }, { passive: false });
+            gameBoard.addEventListener('touchmove', handleTouchMove, { passive: false });
+            document.addEventListener('touchend', handleTouchEnd, { passive: false });
             
             // Prevent default touch actions on the entire game area
             document.getElementById('gameBoard').addEventListener('touchmove', e => {
@@ -372,14 +430,14 @@
             });
         }
         
-        function handlePieceSelection(event, pieceIndex) {
-            if (!pieces[pieceIndex]) return;
+        function handlePieceSelection(event, index) {
+            if (!pieces[index]) return;
             
-            console.log("Selected piece", pieceIndex);
+            console.log("Selected piece", index);
             
             // Create a copy of the selected piece
-            selectedPiece = JSON.parse(JSON.stringify(pieces[pieceIndex]));
-            selectedPieceIndex = pieceIndex;
+            selectedPiece = JSON.parse(JSON.stringify(pieces[index]));
+            selectedPieceIndex = index;
             
             // Get piece dimensions for better centering
             const shape = selectedPiece.shape;
@@ -390,9 +448,43 @@
             dragOffsetX = pieceWidth * BLOCK_SIZE / 2;
             dragOffsetY = pieceHeight * BLOCK_SIZE / 2;
             
-            // Redraw the board with the selected piece
-            drawBoard();
-            drawDraggingPiece(event.clientX, event.clientY);
+            // For touch events, immediately draw at the touch point
+            if (event.clientX !== undefined) {
+                // Mouse event
+                drawBoard();
+                drawDraggingPiece(event.clientX, event.clientY);
+            } else if (event.touches !== undefined) {
+                // Touch coordinates for mobile
+                const touch = event.touches ? event.touches[0] : event;
+                drawBoard();
+                
+                // On mobile, immediately show piece at finger position
+                const boardRect = gameBoard.getBoundingClientRect();
+                const x = touch.clientX - boardRect.left;
+                const y = touch.clientY - boardRect.top;
+                
+                // Calculate grid position
+                const gridCol = Math.floor(x / BLOCK_SIZE);
+                const gridRow = Math.floor(y / BLOCK_SIZE);
+                
+                // Draw on exact grid positions with special treatment for mobile
+                for (let r = 0; r < shape.length; r++) {
+                    for (let c = 0; c < shape[0].length; c++) {
+                        if (shape[r][c]) {
+                            const drawX = (gridCol + c) * BLOCK_SIZE;
+                            const drawY = (gridRow + r) * BLOCK_SIZE;
+                            
+                            // Draw with high contrast for better visibility on mobile
+                            ctx.fillStyle = selectedPiece.color;
+                            ctx.fillRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
+                            ctx.strokeStyle = 'white';
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
+                            ctx.lineWidth = 1;
+                        }
+                    }
+                }
+            }
         }
         
         function handleMouseMove(event) {
