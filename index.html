@@ -1,179 +1,78 @@
-function handleTouchMove(e) {
-            e.preventDefault(); // Prevent scrolling
-            
-            if (!selectedPiece) return;
-            
-            const touch = e.touches[0];
-            const boardRect = gameBoard.getBoundingClientRect();
-            const x = touch.clientX - boardRect.left;
-            const y = touch.clientY - boardRect.top;
-            
-            // Clear and redraw everything
-            drawBoard();
-            
-            // Calculate grid position for better alignment
-            const gridCol = Math.floor(x / BLOCK_SIZE);
-            const gridRow = Math.floor(y / BLOCK_SIZE);
-            
-            const shape = selectedPiece.shape;
-            
-            // Draw on exact grid positions
-            for (let r = 0; r < shape.length; r++) {
-                for (let c = 0; c < shape[0].length; c++) {
-                    if (shape[r][c]) {
-                        const drawX = (gridCol + c) * BLOCK_SIZE;
-                        const drawY = (gridRow + r) * BLOCK_SIZE;
-                        
-                        // Draw with high contrast for better visibility
-                        ctx.fillStyle = selectedPiece.color;
-                        ctx.fillRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
-                        ctx.strokeStyle = 'white';
-                        ctx.lineWidth = 2;
-                        ctx.strokeRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
-                        ctx.lineWidth = 1;
-                    }
-                }
-            }
-            
-            console.log("Touch move at", gridRow, gridCol);
-        }
-        
-        function handleTouchEnd(e) {
-            e.preventDefault();
-            
-            if (!selectedPiece) return;
-            
-            const touch = e.changedTouches[0];
-            const boardRect = gameBoard.getBoundingClientRect();
-            const x = touch.clientX - boardRect.left;
-            const y = touch.clientY - boardRect.top;
-            
-            // Convert to grid coordinates
-            const col = Math.floor(x / BLOCK_SIZE);
-            const row = Math.floor(y / BLOCK_SIZE);
-            
-            console.log("Touch end at", row, col);
-            
-            // Try to place the piece
-            if (canPlacePiece(row, col)) {
-                placePiece(row, col);
-            }
-            
-            // Reset selection
-            selectedPiece = null;
-            
-            // Redraw
-            drawBoard();
-            drawPieces();
-        }<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
-    <title>Simple Block Puzzle</title>
+    <title>Block Game</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body {
             background-color: #2c3e50;
             color: white;
             font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 15px;
             text-align: center;
-            touch-action: none; /* Prevent browser touch actions */
-            overflow: hidden; /* Prevent scrolling */
+            touch-action: none;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
         }
         
-        #gameBoard {
-            border: 1px solid white;
+        #gameCanvas {
+            border: 2px solid white;
             background-color: #34495e;
-            margin: 20px auto;
             display: block;
-            touch-action: none; /* Prevent default touch actions on this element */
+            margin: 0 auto;
+            touch-action: none;
         }
         
         #piecesArea {
-            margin: 20px auto;
             display: flex;
-            justify-content: space-around;
-            max-width: 500px;
-            touch-action: none; /* Prevent default touch actions on piece area */
+            justify-content: space-between;
+            width: 100%;
+            max-width: 400px;
+            margin: 20px auto 0;
         }
         
         .pieceCanvas {
             border: 1px solid #7f8c8d;
             background-color: #4a617a;
             display: block;
-            touch-action: none; /* Prevent default touch actions on piece canvases */
+            touch-action: none;
         }
         
         #score {
-            font-size: 24px;
-            margin-top: 10px;
-        }
-        
-        #gameOver {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.8);
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-        }
-        
-        #gameOverBox {
-            background-color: #34495e;
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-        }
-        
-        button {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            font-size: 18px;
-            cursor: pointer;
-            margin-top: 20px;
+            font-size: 20px;
+            margin: 15px 0;
         }
     </style>
 </head>
 <body>
-    <h1>Block Puzzle Game</h1>
     <div id="score">Score: 0</div>
-    
-    <canvas id="gameBoard"></canvas>
-    
+    <canvas id="gameCanvas"></canvas>
     <div id="piecesArea">
         <canvas class="pieceCanvas" id="piece0"></canvas>
         <canvas class="pieceCanvas" id="piece1"></canvas>
         <canvas class="pieceCanvas" id="piece2"></canvas>
     </div>
     
-    <div id="gameOver">
-        <div id="gameOverBox">
-            <h2>Game Over!</h2>
-            <p id="finalScore">Final Score: 0</p>
-            <button id="restartButton">Play Again</button>
-        </div>
-    </div>
-    
     <script>
-        // Disable page zooming on mobile
-        document.addEventListener('gesturestart', function(e) {
-            e.preventDefault();
-        }, { passive: false });
-        
         // Game constants
         const COLS = 8;
-        const ROWS = 14; // Increased from 10 to make game area longer
-        const BLOCK_SIZE = 30;
+        const ROWS = 10; // Reduced from 14 to 10 for better piece visibility
         
-        // DOM elements
-        const gameBoard = document.getElementById('gameBoard');
-        const ctx = gameBoard.getContext('2d');
+        // Determine block size based on screen dimensions
+        let BLOCK_SIZE = Math.floor(Math.min(
+            (window.innerWidth - 30) / COLS,
+            (window.innerHeight - 200) / ROWS // Increased margin for piece area
+        ));
+        
+        // Make sure block size is at least 20px
+        BLOCK_SIZE = Math.max(BLOCK_SIZE, 20);
+        
+        // Game elements
+        const gameCanvas = document.getElementById('gameCanvas');
+        const gameCtx = gameCanvas.getContext('2d');
         const pieceCanvases = [
             document.getElementById('piece0'),
             document.getElementById('piece1'),
@@ -181,34 +80,18 @@ function handleTouchMove(e) {
         ];
         const pieceCtxs = pieceCanvases.map(canvas => canvas.getContext('2d'));
         const scoreDisplay = document.getElementById('score');
-        const gameOverDisplay = document.getElementById('gameOver');
-        const finalScoreDisplay = document.getElementById('finalScore');
-        const restartButton = document.getElementById('restartButton');
         
-        // Set canvas sizes based on device
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        const blockSizeFactor = isMobile ? 0.8 : 1.0; // Slightly smaller on mobile
+        // Set canvas sizes
+        gameCanvas.width = COLS * BLOCK_SIZE;
+        gameCanvas.height = ROWS * BLOCK_SIZE;
         
-        gameBoard.width = COLS * BLOCK_SIZE;
-        gameBoard.height = ROWS * BLOCK_SIZE;
-        
-        // Make piece preview larger on mobile
-        const PIECE_CANVAS_SIZE = isMobile ? 100 : 120;
+        const PIECE_SIZE = Math.min(BLOCK_SIZE * 4, 80); // Reduced from 100 to 80
         pieceCanvases.forEach(canvas => {
-            canvas.width = PIECE_CANVAS_SIZE;
-            canvas.height = PIECE_CANVAS_SIZE;
+            canvas.width = PIECE_SIZE;
+            canvas.height = PIECE_SIZE;
         });
         
-        // Game state
-        let board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-        let pieces = [];
-        let selectedPiece = null;
-        let selectedPieceIndex = -1;
-        let dragOffsetX = 0;
-        let dragOffsetY = 0;
-        let score = 0;
-        
-        // Piece definitions
+        // Piece templates
         const PIECES = [
             { shape: [[1,1,1,1]], color: '#00BFFF' },          // I - Cyan
             { shape: [[1,1],[1,1]], color: '#FFD700' },         // O - Yellow
@@ -219,106 +102,121 @@ function handleTouchMove(e) {
             { shape: [[1,1,1],[0,0,1]], color: '#FFA500' }      // J - Orange
         ];
         
-        // Game initialization
+        // Game state
+        let board = [];
+        let pieces = [];
+        let score = 0;
+        let selectedPiece = null;
+        let selectedPieceIndex = -1;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        
+        // Initialize the game
         function init() {
-            console.log("Initializing game...");
+            // Create event listeners
+            setupEvents();
             
-            // Set up event listeners for pieces - both mouse and touch
+            // Start the game
+            restartGame();
+        }
+        
+        // Setup event listeners
+        function setupEvents() {
+            // Piece selection
             pieceCanvases.forEach((canvas, index) => {
                 // Mouse events
                 canvas.addEventListener('mousedown', e => {
-                    handlePieceSelection(e, index);
+                    selectPiece(e, index);
                 });
                 
                 // Touch events
                 canvas.addEventListener('touchstart', e => {
-                    e.preventDefault(); // Prevent scrolling
+                    e.preventDefault();
                     const touch = e.touches[0];
-                    handlePieceSelection(touch, index);
+                    selectPiece(touch, index);
                 }, { passive: false });
             });
             
-            // Set up event listeners for drag and drop
-            // Mouse events
-            gameBoard.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
+            // Game canvas events
+            gameCanvas.addEventListener('mousemove', e => {
+                if (selectedPiece) {
+                    dragPiece(e.clientX, e.clientY);
+                }
+            });
             
-            // Touch events
-            gameBoard.addEventListener('touchmove', handleTouchMove, { passive: false });
-            document.addEventListener('touchend', handleTouchEnd, { passive: false });
-            
-            // Prevent default touch actions on the entire game area
-            document.getElementById('gameBoard').addEventListener('touchmove', e => {
+            gameCanvas.addEventListener('touchmove', e => {
                 e.preventDefault();
+                if (selectedPiece) {
+                    const touch = e.touches[0];
+                    dragPiece(touch.clientX, touch.clientY);
+                }
             }, { passive: false });
             
-            document.getElementById('piecesArea').addEventListener('touchmove', e => {
-                e.preventDefault();
+            // Document-wide events for release
+            document.addEventListener('mouseup', e => {
+                if (selectedPiece) {
+                    dropPiece(e.clientX, e.clientY);
+                }
+            });
+            
+            document.addEventListener('touchend', e => {
+                if (selectedPiece) {
+                    e.preventDefault();
+                    const touch = e.changedTouches[0];
+                    dropPiece(touch.clientX, touch.clientY);
+                }
             }, { passive: false });
             
-            // Set up restart button
-            restartButton.addEventListener('click', restartGame);
-            restartButton.addEventListener('touchend', e => {
-                e.preventDefault();
-                restartGame();
+            // Prevent default touch behavior
+            document.addEventListener('touchmove', e => {
+                if (e.target === gameCanvas || pieceCanvases.includes(e.target)) {
+                    e.preventDefault();
+                }
             }, { passive: false });
-            
-            // Start the game
-            restartGame();
-            
-            console.log("Game initialized successfully");
         }
         
+        // Start/restart the game
         function restartGame() {
-            console.log("Restarting game...");
-            
-            // Reset game state
             board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
             score = 0;
             selectedPiece = null;
             selectedPieceIndex = -1;
             
-            // Hide game over screen
-            gameOverDisplay.style.display = 'none';
-            
-            // Generate new pieces
-            generateNewPieces();
-            
-            // Draw the board and pieces
+            generatePieces();
             drawBoard();
+            drawPieces();
             updateScore();
-            
-            console.log("Game restarted successfully");
         }
         
-        function generateNewPieces() {
-            console.log("Generating new pieces...");
+        // Generate new pieces
+        function generatePieces() {
             pieces = [];
-            
             for (let i = 0; i < 3; i++) {
-                const randomIndex = Math.floor(Math.random() * PIECES.length);
-                const template = PIECES[randomIndex];
-                
-                // Deep copy the shape to avoid reference issues
-                const shape = JSON.parse(JSON.stringify(template.shape));
-                
-                // Random rotation (0-3 times)
-                const rotations = Math.floor(Math.random() * 4);
-                let rotatedShape = shape;
-                for (let r = 0; r < rotations; r++) {
-                    rotatedShape = rotatePiece(rotatedShape);
-                }
-                
-                pieces.push({
-                    shape: rotatedShape,
-                    color: template.color
-                });
+                pieces.push(getRandomPiece());
+            }
+        }
+        
+        // Get a random piece
+        function getRandomPiece() {
+            const index = Math.floor(Math.random() * PIECES.length);
+            const template = PIECES[index];
+            
+            // Copy the shape
+            let shape = JSON.parse(JSON.stringify(template.shape));
+            
+            // Random rotation
+            const rotations = Math.floor(Math.random() * 4);
+            for (let i = 0; i < rotations; i++) {
+                shape = rotatePiece(shape);
             }
             
-            drawPieces();
-            console.log("Pieces generated:", pieces);
+            return {
+                shape: shape,
+                color: template.color
+            };
         }
         
+        // Rotate a piece
         function rotatePiece(shape) {
             const rows = shape.length;
             const cols = shape[0].length;
@@ -333,94 +231,96 @@ function handleTouchMove(e) {
             return rotated;
         }
         
+        // Draw the game board
         function drawBoard() {
-            // Clear the board
-            ctx.fillStyle = '#34495e';
-            ctx.fillRect(0, 0, gameBoard.width, gameBoard.height);
+            // Clear the canvas
+            gameCtx.fillStyle = '#34495e';
+            gameCtx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
             
             // Draw grid lines
-            ctx.strokeStyle = '#2c3e50';
-            ctx.lineWidth = 1;
+            gameCtx.strokeStyle = '#2c3e50';
+            gameCtx.lineWidth = 1;
             
             // Vertical lines
-            for (let i = 0; i <= COLS; i++) {
-                ctx.beginPath();
-                ctx.moveTo(i * BLOCK_SIZE, 0);
-                ctx.lineTo(i * BLOCK_SIZE, ROWS * BLOCK_SIZE);
-                ctx.stroke();
+            for (let c = 0; c <= COLS; c++) {
+                gameCtx.beginPath();
+                gameCtx.moveTo(c * BLOCK_SIZE, 0);
+                gameCtx.lineTo(c * BLOCK_SIZE, ROWS * BLOCK_SIZE);
+                gameCtx.stroke();
             }
             
             // Horizontal lines
-            for (let i = 0; i <= ROWS; i++) {
-                ctx.beginPath();
-                ctx.moveTo(0, i * BLOCK_SIZE);
-                ctx.lineTo(COLS * BLOCK_SIZE, i * BLOCK_SIZE);
-                ctx.stroke();
+            for (let r = 0; r <= ROWS; r++) {
+                gameCtx.beginPath();
+                gameCtx.moveTo(0, r * BLOCK_SIZE);
+                gameCtx.lineTo(COLS * BLOCK_SIZE, r * BLOCK_SIZE);
+                gameCtx.stroke();
             }
             
             // Draw filled blocks
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
                     if (board[r][c]) {
-                        drawBlock(ctx, c, r, board[r][c]);
+                        drawBlock(gameCtx, c, r, board[r][c]);
                     }
                 }
             }
-            
-            // Draw darker border around the entire board
-            ctx.strokeStyle = '#ecf0f1';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(0, 0, COLS * BLOCK_SIZE, ROWS * BLOCK_SIZE);
-            ctx.lineWidth = 1;
         }
         
-        function drawBlock(context, x, y, color) {
-            context.fillStyle = color;
-            context.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-            context.strokeStyle = '#2c3e50';
-            context.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+        // Draw a block
+        function drawBlock(ctx, x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+            ctx.strokeStyle = '#2c3e50';
+            ctx.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
         }
         
+        // Draw the pieces
         function drawPieces() {
             pieceCanvases.forEach((canvas, index) => {
-                const context = pieceCtxs[index];
+                const ctx = pieceCtxs[index];
                 const piece = pieces[index];
                 
                 // Clear the canvas
-                context.fillStyle = '#4a617a';
-                context.fillRect(0, 0, PIECE_CANVAS_SIZE, PIECE_CANVAS_SIZE);
+                ctx.fillStyle = '#4a617a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
-                // If piece is used, skip drawing
-                if (!piece) return;
+                if (!piece) {
+                    canvas.style.opacity = '0.3';
+                    return;
+                }
+                
+                canvas.style.opacity = '1';
                 
                 const shape = piece.shape;
                 const rows = shape.length;
                 const cols = shape[0].length;
                 
-                // Calculate block size and position to center the piece
+                // Calculate block size for piece preview
                 const blockSize = Math.min(
-                    Math.floor(PIECE_CANVAS_SIZE / (cols + 2)),
-                    Math.floor(PIECE_CANVAS_SIZE / (rows + 2))
+                    Math.floor(canvas.width / (cols + 2)),
+                    Math.floor(canvas.height / (rows + 2))
                 );
                 
-                const offsetX = (PIECE_CANVAS_SIZE - cols * blockSize) / 2;
-                const offsetY = (PIECE_CANVAS_SIZE - rows * blockSize) / 2;
+                // Center the piece
+                const startX = (canvas.width - cols * blockSize) / 2;
+                const startY = (canvas.height - rows * blockSize) / 2;
                 
-                // Draw each block in the piece
+                // Draw the piece
                 for (let r = 0; r < rows; r++) {
                     for (let c = 0; c < cols; c++) {
                         if (shape[r][c]) {
-                            context.fillStyle = piece.color;
-                            context.fillRect(
-                                offsetX + c * blockSize,
-                                offsetY + r * blockSize,
+                            ctx.fillStyle = piece.color;
+                            ctx.fillRect(
+                                startX + c * blockSize,
+                                startY + r * blockSize,
                                 blockSize,
                                 blockSize
                             );
-                            context.strokeStyle = '#2c3e50';
-                            context.strokeRect(
-                                offsetX + c * blockSize,
-                                offsetY + r * blockSize,
+                            ctx.strokeStyle = '#2c3e50';
+                            ctx.strokeRect(
+                                startX + c * blockSize,
+                                startY + r * blockSize,
                                 blockSize,
                                 blockSize
                             );
@@ -430,119 +330,108 @@ function handleTouchMove(e) {
             });
         }
         
-        function handlePieceSelection(event, index) {
+        // Select a piece
+        function selectPiece(event, index) {
             if (!pieces[index]) return;
-            
-            console.log("Selected piece", index);
             
             // Create a copy of the selected piece
             selectedPiece = JSON.parse(JSON.stringify(pieces[index]));
             selectedPieceIndex = index;
             
-            // Get piece dimensions for better centering
+            // Calculate drag offset based on piece dimensions
             const shape = selectedPiece.shape;
-            const pieceHeight = shape.length;
-            const pieceWidth = shape[0].length;
+            const pieceWidth = shape[0].length * BLOCK_SIZE;
+            const pieceHeight = shape.length * BLOCK_SIZE;
             
-            // Set standard offset to half the piece size for better positioning
-            dragOffsetX = pieceWidth * BLOCK_SIZE / 2;
-            dragOffsetY = pieceHeight * BLOCK_SIZE / 2;
+            // Center the piece on the cursor/touch
+            dragOffsetX = pieceWidth / 2;
+            dragOffsetY = pieceHeight / 2;
             
-            // For touch events, immediately draw at the touch point
-            if (event.clientX !== undefined) {
-                // Mouse event
-                drawBoard();
-                drawDraggingPiece(event.clientX, event.clientY);
-            } else if (event.touches !== undefined) {
-                // Touch coordinates for mobile
-                const touch = event.touches ? event.touches[0] : event;
-                drawBoard();
-                
-                // On mobile, immediately show piece at finger position
-                const boardRect = gameBoard.getBoundingClientRect();
-                const x = touch.clientX - boardRect.left;
-                const y = touch.clientY - boardRect.top;
-                
-                // Calculate grid position
-                const gridCol = Math.floor(x / BLOCK_SIZE);
-                const gridRow = Math.floor(y / BLOCK_SIZE);
-                
-                // Draw on exact grid positions with special treatment for mobile
-                for (let r = 0; r < shape.length; r++) {
-                    for (let c = 0; c < shape[0].length; c++) {
-                        if (shape[r][c]) {
-                            const drawX = (gridCol + c) * BLOCK_SIZE;
-                            const drawY = (gridRow + r) * BLOCK_SIZE;
+            // Initialize last position for line clearing logic
+            selectedPiece.lastX = 0;
+            selectedPiece.lastY = 0;
+            
+            // Immediately draw the piece at the cursor/touch position
+            dragPiece(event.clientX, event.clientY);
+        }
+        
+        // Drag a piece
+        function dragPiece(clientX, clientY) {
+            // Redraw the board
+            drawBoard();
+            
+            // Get position relative to game canvas
+            const rect = gameCanvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            
+            // Save the last position for line clearing logic
+            selectedPiece.lastX = x;
+            selectedPiece.lastY = y;
+            
+            // Calculate grid position
+            const col = Math.floor((x - dragOffsetX) / BLOCK_SIZE);
+            const row = Math.floor((y - dragOffsetY) / BLOCK_SIZE);
+            
+            // Draw the piece at exact grid position
+            const shape = selectedPiece.shape;
+            const validPlacement = canPlacePiece(row, col);
+            
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[0].length; c++) {
+                    if (shape[r][c]) {
+                        const drawX = (col + c) * BLOCK_SIZE;
+                        const drawY = (row + r) * BLOCK_SIZE;
+                        
+                        // Only draw if inside canvas bounds
+                        if (drawX >= 0 && drawX < gameCanvas.width && 
+                            drawY >= 0 && drawY < gameCanvas.height) {
                             
-                            // Draw with high contrast for better visibility on mobile
-                            ctx.fillStyle = selectedPiece.color;
-                            ctx.fillRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
-                            ctx.strokeStyle = 'white';
-                            ctx.lineWidth = 2;
-                            ctx.strokeRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
-                            ctx.lineWidth = 1;
+                            // Draw with opacity based on validity
+                            gameCtx.globalAlpha = validPlacement ? 1.0 : 0.5;
+                            gameCtx.fillStyle = selectedPiece.color;
+                            gameCtx.fillRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
+                            
+                            // Add a border
+                            gameCtx.strokeStyle = 'white';
+                            gameCtx.lineWidth = 2;
+                            gameCtx.strokeRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
+                            gameCtx.lineWidth = 1;
+                            
+                            // Reset opacity
+                            gameCtx.globalAlpha = 1.0;
                         }
                     }
                 }
             }
         }
         
-        function handleMouseMove(event) {
-            if (!selectedPiece) return;
+        // Drop a piece
+        function dropPiece(clientX, clientY) {
+            // Get position relative to game canvas
+            const rect = gameCanvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
             
-            // Redraw the board
-            drawBoard();
+            // Calculate grid position
+            const col = Math.floor((x - dragOffsetX) / BLOCK_SIZE);
+            const row = Math.floor((y - dragOffsetY) / BLOCK_SIZE);
             
-            // Draw the piece at cursor position
-            drawDraggingPiece(event.clientX, event.clientY);
-            
-            // Show preview placement
-            const boardRect = gameBoard.getBoundingClientRect();
-            const x = event.clientX - boardRect.left;
-            const y = event.clientY - boardRect.top;
-            
-            const col = Math.floor(x / BLOCK_SIZE);
-            const row = Math.floor(y / BLOCK_SIZE);
-            
-            drawPlacementPreview(row, col);
-        }
-        
-        function drawDraggingPiece(clientX, clientY) {
-            if (!selectedPiece) return;
-            
-            const boardRect = gameBoard.getBoundingClientRect();
-            const x = clientX - boardRect.left;
-            const y = clientY - boardRect.top;
-            
-            // Calculate exact grid position for better alignment
-            const gridCol = Math.floor(x / BLOCK_SIZE);
-            const gridRow = Math.floor(y / BLOCK_SIZE);
-            
-            const shape = selectedPiece.shape;
-            
-            // Draw piece aligned to grid for better visual feedback
-            for (let r = 0; r < shape.length; r++) {
-                for (let c = 0; c < shape[0].length; c++) {
-                    if (shape[r][c]) {
-                        // Draw aligned to the grid position
-                        const drawX = (gridCol + c) * BLOCK_SIZE;
-                        const drawY = (gridRow + r) * BLOCK_SIZE;
-                        
-                        ctx.fillStyle = selectedPiece.color;
-                        ctx.fillRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
-                        ctx.strokeStyle = '#2c3e50';
-                        ctx.strokeRect(drawX, drawY, BLOCK_SIZE, BLOCK_SIZE);
-                    }
-                }
+            // Try to place the piece
+            if (canPlacePiece(row, col)) {
+                placePiece(row, col);
             }
+            
+            // Reset selection
+            selectedPiece = null;
+            selectedPieceIndex = -1;
+            
+            // Redraw
+            drawBoard();
+            drawPieces();
         }
         
-        function drawPlacementPreview(row, col) {
-            // Placement preview/shadow/guide has been removed as requested
-            // The function is kept empty to maintain code structure
-            return;
-        }
-        
+        // Check if a piece can be placed
         function canPlacePiece(row, col) {
             if (!selectedPiece) return false;
             
@@ -555,12 +444,13 @@ function handleTouchMove(e) {
                         const boardCol = col + c;
                         
                         // Check boundaries
-                        if (boardRow < 0 || boardRow >= ROWS || boardCol < 0 || boardCol >= COLS) {
+                        if (boardRow < 0 || boardRow >= ROWS || 
+                            boardCol < 0 || boardCol >= COLS) {
                             return false;
                         }
                         
                         // Check collision
-                        if (board[boardRow][boardCol] !== 0) {
+                        if (board[boardRow][boardCol]) {
                             return false;
                         }
                     }
@@ -570,155 +460,363 @@ function handleTouchMove(e) {
             return true;
         }
         
-        function handleMouseUp(event) {
-            if (!selectedPiece) return;
-            
-            // Get board position
-            const boardRect = gameBoard.getBoundingClientRect();
-            const x = event.clientX - boardRect.left;
-            const y = event.clientY - boardRect.top;
-            
-            // Convert to grid coordinates - ensure we get exact grid alignment
-            const col = Math.floor(x / BLOCK_SIZE);
-            const row = Math.floor(y / BLOCK_SIZE);
-            
-            console.log("Attempting to place at grid position:", row, col);
-            
-            // Try to place the piece
-            if (canPlacePiece(row, col)) {
-                placePiece(row, col);
-            } else {
-                console.log("Cannot place piece at position:", row, col);
-            }
-            
-            // Reset selection
-            selectedPiece = null;
-            
-            // Redraw
-            drawBoard();
-            drawPieces();
-        }
-        
+        // Place a piece on the board
         function placePiece(row, col) {
-            console.log("Placing piece at", row, col);
+            if (!selectedPiece || !selectedPiece.shape) return;
             
             const shape = selectedPiece.shape;
             
-            // Place the piece on the board - with exact grid alignment
+            // Store piece info before we clear the reference
+            const pieceColor = selectedPiece.color;
+            const pieceLastX = selectedPiece.lastX;
+            const pieceLastY = selectedPiece.lastY;
+            const pieceShape = JSON.parse(JSON.stringify(shape));
+            
+            // Place the piece
             for (let r = 0; r < shape.length; r++) {
                 for (let c = 0; c < shape[0].length; c++) {
                     if (shape[r][c]) {
-                        // Use precise board coordinates
-                        const boardRow = row + r;
-                        const boardCol = col + c;
-                        board[boardRow][boardCol] = selectedPiece.color;
+                        board[row + r][col + c] = pieceColor;
                     }
                 }
             }
+            
+            // Count blocks placed for scoring
+            let blocksPlaced = 0;
+            pieceShape.forEach(row => row.forEach(cell => { if (cell) blocksPlaced++; }));
+            score += blocksPlaced;
             
             // Mark the piece as used
             pieces[selectedPieceIndex] = null;
             
-            // Check for line clears
-            const linesCleared = checkForClears();
+            // We need to release the selectedPiece reference before continuing
+            // to avoid "Cannot read properties of null" error
+            const pieceLastRow = Math.floor((pieceLastY - dragOffsetY) / BLOCK_SIZE);
+            const pieceLastCol = Math.floor((pieceLastX - dragOffsetX) / BLOCK_SIZE);
             
-            // Add score (1 point per block + line clear bonus)
-            let blocksPlaced = 0;
-            shape.forEach(row => row.forEach(cell => { if (cell) blocksPlaced++; }));
+            // Clear the selection
+            selectedPiece = null;
+            selectedPieceIndex = -1;
             
-            score += blocksPlaced + (linesCleared * 10);
-            updateScore();
+            // Draw the board to show the placed piece
+            drawBoard();
             
-            // Generate new pieces if all are used
-            if (pieces.every(p => p === null)) {
-                generateNewPieces();
-            }
-            
-            // Check for game over
-            if (isGameOver()) {
-                showGameOver();
-            }
-        }
-        
-        function checkForClears() {
-            let linesCleared = 0;
-            
-            // Check rows
-            for (let r = 0; r < ROWS; r++) {
-                if (board[r].every(cell => cell !== 0)) {
-                    // Clear this row
-                    for (let c = 0; c < COLS; c++) {
-                        board[r][c] = 0;
-                    }
-                    linesCleared++;
-                }
-            }
-            
-            // Check columns
-            for (let c = 0; c < COLS; c++) {
-                let columnFull = true;
-                for (let r = 0; r < ROWS; r++) {
-                    if (board[r][c] === 0) {
-                        columnFull = false;
-                        break;
+            // Check for line clears after a brief delay to see the placed piece
+            setTimeout(() => {
+                // Manually create a rows/cols set to check
+                const rowsToCheck = new Set();
+                const colsToCheck = new Set();
+                
+                for (let r = 0; r < pieceShape.length; r++) {
+                    for (let c = 0; c < pieceShape[0].length; c++) {
+                        if (pieceShape[r][c]) {
+                            rowsToCheck.add(pieceLastRow + r);
+                            colsToCheck.add(pieceLastCol + c);
+                        }
                     }
                 }
                 
-                if (columnFull) {
-                    // Clear this column
-                    for (let r = 0; r < ROWS; r++) {
-                        board[r][c] = 0;
+                let linesCleared = 0;
+                let cellsToAnimate = [];
+                
+                // Check rows
+                rowsToCheck.forEach(r => {
+                    if (r >= 0 && r < ROWS) {
+                        let complete = true;
+                        for (let c = 0; c < COLS; c++) {
+                            if (!board[r][c]) {
+                                complete = false;
+                                break;
+                            }
+                        }
+                        
+                        if (complete) {
+                            // Add cells to animation list
+                            for (let c = 0; c < COLS; c++) {
+                                cellsToAnimate.push({row: r, col: c, color: board[r][c]});
+                            }
+                            linesCleared++;
+                        }
                     }
-                    linesCleared++;
+                });
+                
+                // Check columns
+                colsToCheck.forEach(c => {
+                    if (c >= 0 && c < COLS) {
+                        let complete = true;
+                        for (let r = 0; r < ROWS; r++) {
+                            if (!board[r][c]) {
+                                complete = false;
+                                break;
+                            }
+                        }
+                        
+                        if (complete) {
+                            // Add cells to animation list (if not already added from row)
+                            for (let r = 0; r < ROWS; r++) {
+                                // Check if this cell was already added (from a completed row)
+                                let alreadyAdded = cellsToAnimate.some(cell => 
+                                    cell.row === r && cell.col === c);
+                                    
+                                if (!alreadyAdded) {
+                                    cellsToAnimate.push({row: r, col: c, color: board[r][c]});
+                                }
+                            }
+                            linesCleared++;
+                        }
+                    }
+                });
+                
+                // Animate and clear cells if there are completed lines
+                if (cellsToAnimate.length > 0) {
+                    animateCellClearing(cellsToAnimate);
+                    
+                    setTimeout(() => {
+                        score += linesCleared * 10;
+                        
+                        // Generate new pieces if all are used
+                        if (pieces.every(p => p === null)) {
+                            generatePieces();
+                        }
+                        
+                        // Update score
+                        updateScore();
+                        
+                        // Redraw pieces
+                        drawPieces();
+                        
+                        // Check for game over
+                        if (isGameOver()) {
+                            setTimeout(restartGame, 1500);
+                        }
+                    }, 400); // Wait for animation to complete
+                } else {
+                    // No lines cleared, continue immediately
+                    // Generate new pieces if all are used
+                    if (pieces.every(p => p === null)) {
+                        generatePieces();
+                    }
+                    
+                    // Update score
+                    updateScore();
+                    
+                    // Redraw pieces
+                    drawPieces();
+                    
+                    // Check for game over
+                    if (isGameOver()) {
+                        setTimeout(restartGame, 1500);
+                    }
                 }
+            }, 100);
+        }
+        
+        // Check for and clear lines
+        function checkForLines() {
+            let linesCleared = 0;
+            let rowsToCheck = new Set();
+            let colsToCheck = new Set();
+            let cellsToAnimate = [];
+            
+            // Get affected rows and columns from the last piece placement
+            if (selectedPiece && selectedPiece.shape) {
+                const shape = selectedPiece.shape;
+                const startRow = Math.floor((selectedPiece.lastY - dragOffsetY) / BLOCK_SIZE);
+                const startCol = Math.floor((selectedPiece.lastX - dragOffsetX) / BLOCK_SIZE);
+                
+                for (let r = 0; r < shape.length; r++) {
+                    for (let c = 0; c < shape[0].length; c++) {
+                        if (shape[r][c]) {
+                            rowsToCheck.add(startRow + r);
+                            colsToCheck.add(startCol + c);
+                        }
+                    }
+                }
+            } else {
+                // If selectedPiece is not available, check all rows and columns
+                for (let r = 0; r < ROWS; r++) {
+                    rowsToCheck.add(r);
+                }
+                for (let c = 0; c < COLS; c++) {
+                    colsToCheck.add(c);
+                }
+            }
+            
+            // Check rows
+            rowsToCheck.forEach(r => {
+                if (r >= 0 && r < ROWS) {
+                    let complete = true;
+                    for (let c = 0; c < COLS; c++) {
+                        if (!board[r][c]) {
+                            complete = false;
+                            break;
+                        }
+                    }
+                    
+                    if (complete) {
+                        // Add cells to animation list
+                        for (let c = 0; c < COLS; c++) {
+                            cellsToAnimate.push({row: r, col: c, color: board[r][c]});
+                        }
+                        linesCleared++;
+                    }
+                }
+            });
+            
+            // Check columns
+            colsToCheck.forEach(c => {
+                if (c >= 0 && c < COLS) {
+                    let complete = true;
+                    for (let r = 0; r < ROWS; r++) {
+                        if (!board[r][c]) {
+                            complete = false;
+                            break;
+                        }
+                    }
+                    
+                    if (complete) {
+                        // Add cells to animation list (if not already added from row)
+                        for (let r = 0; r < ROWS; r++) {
+                            // Check if this cell was already added (from a completed row)
+                            let alreadyAdded = cellsToAnimate.some(cell => 
+                                cell.row === r && cell.col === c);
+                                
+                            if (!alreadyAdded) {
+                                cellsToAnimate.push({row: r, col: c, color: board[r][c]});
+                            }
+                        }
+                        linesCleared++;
+                    }
+                }
+            });
+            
+            // Animate and clear cells if there are completed lines
+            if (cellsToAnimate.length > 0) {
+                animateCellClearing(cellsToAnimate);
             }
             
             return linesCleared;
         }
         
+        // Animate cell clearing with shimmer effect
+        function animateCellClearing(cells) {
+            // Make a copy of the board for animation
+            const boardCopy = JSON.parse(JSON.stringify(board));
+            
+            // Animation parameters
+            const totalFrames = 15;
+            const shimmerColors = [
+                '#ffffff', '#f0f0f0', '#e0e0e0', '#d0d0d0', '#c0c0c0',
+                '#b0b0b0', '#a0a0a0', '#909090', '#808080', '#707070',
+                '#606060', '#505050', '#404040', '#303030', '#202020'
+            ];
+            
+            let frame = 0;
+            
+            function animate() {
+                if (frame >= totalFrames) {
+                    // Animation complete, clear cells on the actual board
+                    cells.forEach(cell => {
+                        board[cell.row][cell.col] = 0;
+                    });
+                    drawBoard();
+                    return;
+                }
+                
+                // Draw the board with current non-clearing cells
+                drawBoard();
+                
+                // Draw animated cells with shimmer effect
+                cells.forEach(cell => {
+                    // Calculate shimmer color based on frame
+                    // We'll use a fading white effect
+                    const shimmerColor = shimmerColors[frame];
+                    
+                    // Draw the cell with shimmer effect
+                    gameCtx.fillStyle = shimmerColor;
+                    gameCtx.fillRect(
+                        cell.col * BLOCK_SIZE, 
+                        cell.row * BLOCK_SIZE, 
+                        BLOCK_SIZE, 
+                        BLOCK_SIZE
+                    );
+                    
+                    // Add a fade-out border
+                    gameCtx.strokeStyle = shimmerColor;
+                    gameCtx.lineWidth = 1;
+                    gameCtx.strokeRect(
+                        cell.col * BLOCK_SIZE, 
+                        cell.row * BLOCK_SIZE, 
+                        BLOCK_SIZE, 
+                        BLOCK_SIZE
+                    );
+                });
+                
+                frame++;
+                requestAnimationFrame(animate);
+            }
+            
+            // Start animation
+            animate();
+        }
+        
+        // Check if the game is over
         function isGameOver() {
-            // If all pieces are used, not game over yet
+            // If no pieces left, not game over yet
             if (pieces.every(p => p === null)) return false;
             
-            // Check if any remaining piece can be placed anywhere
+            // Check if any piece can be placed
             for (let p = 0; p < pieces.length; p++) {
                 if (!pieces[p]) continue;
                 
-                // Try placing at every position
                 for (let r = 0; r < ROWS; r++) {
                     for (let c = 0; c < COLS; c++) {
-                        // Create temporary piece for checking
+                        // Create a temporary piece copy for checking
                         const tempPiece = JSON.parse(JSON.stringify(pieces[p]));
-                        selectedPiece = tempPiece;
                         
-                        if (canPlacePiece(r, c)) {
-                            selectedPiece = null;
+                        if (canPlacePieceAt(r, c, tempPiece)) {
                             return false; // Found a valid move
                         }
                     }
                 }
             }
             
-            selectedPiece = null;
-            return true; // No valid moves
+            return true; // No valid moves found
         }
         
-        function showGameOver() {
-            console.log("Game over!");
-            finalScoreDisplay.textContent = `Final Score: ${score}`;
-            gameOverDisplay.style.display = 'flex';
+        // Check if a piece can be placed (helper version)
+        function canPlacePieceAt(row, col, piece) {
+            const shape = piece.shape;
+            
+            for (let r = 0; r < shape.length; r++) {
+                for (let c = 0; c < shape[0].length; c++) {
+                    if (shape[r][c]) {
+                        const boardRow = row + r;
+                        const boardCol = col + c;
+                        
+                        // Check boundaries
+                        if (boardRow < 0 || boardRow >= ROWS || 
+                            boardCol < 0 || boardCol >= COLS) {
+                            return false;
+                        }
+                        
+                        // Check collision
+                        if (board[boardRow][boardCol]) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            
+            return true;
         }
         
+        // Update score display
         function updateScore() {
             scoreDisplay.textContent = `Score: ${score}`;
         }
         
-        // Prevent scrolling on mobile
-        document.addEventListener('touchmove', function(e) {
-            e.preventDefault();
-        }, { passive: false });
-        
-        // Start the game when the page is loaded
+        // Start the game when the page loads
         window.addEventListener('load', init);
     </script>
 </body>
