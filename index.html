@@ -24,8 +24,11 @@
         border: 1px solid #ecf0f1; 
         background-color: #34495e; 
         margin-bottom: 20px;
-        max-width: 100%;
-        height: auto;
+        width: 95vw;
+        height: 70vh;
+        max-width: 600px;
+        max-height: 80vw;
+        display: block;
     }
     #scoreBoard { 
         font-size: clamp(18px, 4vw, 24px); 
@@ -33,17 +36,22 @@
     }
     #piecesContainer { 
         display: flex; 
-        justify-content: space-around; 
-        width: 100%;
-        max-width: 400px;
+        justify-content: space-between; 
+        width: 95vw;
+        max-width: 600px;
         margin: 0 auto;
+        gap: 2vw;
     }
     .pieceCanvas { 
         border: 1px solid #7f8c8d; 
-        margin: 5px; 
+        margin: 0; 
         background-color: #4a617a;
-        max-width: 30%;
-        height: auto;
+        width: 28vw;
+        height: 28vw;
+        max-width: 180px;
+        max-height: 180px;
+        flex: 1 1 0;
+        display: block;
     }
     #gameOverScreen {
         display: none; 
@@ -73,10 +81,10 @@
     }
     @media (max-width: 600px) {
         #piecesContainer {
-            width: 90%;
+            width: 98vw;
         }
         .pieceCanvas {
-            margin: 2px;
+            margin: 0;
         }
     }
 </style>
@@ -100,8 +108,14 @@
 <script>
     const COLS = 8;
     const ROWS = 10;
-    const BLOCK_SIZE = Math.min(window.innerWidth * 0.9 / COLS, window.innerHeight * 0.6 / ROWS); // Increased size
-    const PIECE_CANVAS_SIZE = 4 * BLOCK_SIZE;
+    // Responsive block size based on canvas size
+    function getBlockSize() {
+        const canvasW = Math.min(window.innerWidth * 0.95, 600);
+        const canvasH = Math.min(window.innerHeight * 0.7, canvasW * 0.8);
+        return Math.floor(Math.min(canvasW / COLS, canvasH / ROWS));
+    }
+    let BLOCK_SIZE = getBlockSize();
+    let PIECE_CANVAS_SIZE = 4 * BLOCK_SIZE;
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -116,28 +130,20 @@
     const finalScoreDisplay = document.getElementById('finalScore');
 
     function resizeCanvas() {
-        const newBlockSize = Math.min(window.innerWidth * 0.9 / COLS, window.innerHeight * 0.6 / ROWS);
-        if (newBlockSize !== BLOCK_SIZE) {
-            BLOCK_SIZE = newBlockSize;
-            PIECE_CANVAS_SIZE = 4 * BLOCK_SIZE;
-            
-            canvas.width = COLS * BLOCK_SIZE;
-            canvas.height = ROWS * BLOCK_SIZE;
-            
-            pieceCanvases.forEach(pc => {
-                pc.width = PIECE_CANVAS_SIZE;
-                pc.height = PIECE_CANVAS_SIZE;
-            });
-            
-            drawBoard();
-            drawPiecePreviews();
-        }
+        BLOCK_SIZE = getBlockSize();
+        PIECE_CANVAS_SIZE = 4 * BLOCK_SIZE;
+        canvas.width = COLS * BLOCK_SIZE;
+        canvas.height = ROWS * BLOCK_SIZE;
+        pieceCanvases.forEach(pc => {
+            pc.width = PIECE_CANVAS_SIZE;
+            pc.height = PIECE_CANVAS_SIZE;
+        });
+        drawBoard();
+        drawPiecePreviews();
     }
 
     // Initial canvas setup
     resizeCanvas();
-
-    // Handle window resize
     window.addEventListener('resize', resizeCanvas);
     window.addEventListener('orientationchange', () => {
         setTimeout(resizeCanvas, 100);
@@ -397,11 +403,14 @@
                 selectedPiece = JSON.parse(JSON.stringify(currentPieces[index]));
                 selectedPiece.colorAlpha = selectedPiece.color + '80';
                 selectedPieceIndex = index;
-                
                 const rect = pCanvas.getBoundingClientRect();
                 const clickXInCanvas = e.clientX - rect.left;
                 const clickYInCanvas = e.clientY - rect.top;
-                setupDragOffset(clickXInCanvas, clickYInCanvas, pCanvas);
+                // Use the exact click point as drag offset
+                dragOffsetX = clickXInCanvas;
+                dragOffsetY = clickYInCanvas;
+                drawBoard();
+                drawDraggingPiece(selectedPiece, clickXInCanvas, clickYInCanvas);
             }
         }
 
@@ -411,32 +420,18 @@
                 selectedPiece = JSON.parse(JSON.stringify(currentPieces[index]));
                 selectedPiece.colorAlpha = selectedPiece.color + '80';
                 selectedPieceIndex = index;
-                
                 const rect = pCanvas.getBoundingClientRect();
                 const touch = e.touches[0];
                 const touchXInCanvas = touch.clientX - rect.left;
                 const touchYInCanvas = touch.clientY - rect.top;
                 lastTouchX = touch.clientX;
                 lastTouchY = touch.clientY;
-                setupDragOffset(touchXInCanvas, touchYInCanvas, pCanvas);
+                // Use the exact touch point as drag offset
+                dragOffsetX = touchXInCanvas;
+                dragOffsetY = touchYInCanvas;
+                drawBoard();
+                drawDraggingPiece(selectedPiece, touchXInCanvas, touchYInCanvas);
             }
-        }
-
-        function setupDragOffset(xInCanvas, yInCanvas, pCanvas) {
-            const pieceShape = selectedPiece.shape;
-            const pBlockSize = BLOCK_SIZE;
-            const shapeWidth = pieceShape[0].length * pBlockSize;
-            const shapeHeight = pieceShape.length * pBlockSize;
-            const previewStartX = (PIECE_CANVAS_SIZE - shapeWidth) / 2;
-            const previewStartY = (PIECE_CANVAS_SIZE - shapeHeight) / 2;
-
-            const clickedBlockCol = Math.floor((xInCanvas - previewStartX) / BLOCK_SIZE);
-            const clickedBlockRow = Math.floor((yInCanvas - previewStartY) / BLOCK_SIZE);
-            dragOffsetX = clickedBlockCol * BLOCK_SIZE + BLOCK_SIZE / 2;
-            dragOffsetY = clickedBlockRow * BLOCK_SIZE + BLOCK_SIZE / 2;
-
-            drawBoard();
-            drawDraggingPiece(selectedPiece, xInCanvas, yInCanvas);
         }
     });
 
