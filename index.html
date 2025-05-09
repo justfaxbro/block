@@ -129,11 +129,19 @@
                     selectPiece(e, index);
                 });
                 
-                // Touch events
-                canvas.addEventListener('touchstart', e => {
+                // Touch events - with separate named handler for proper binding
+                canvas.addEventListener('touchstart', function touchStartHandler(e) {
                     e.preventDefault();
+                    console.log('Touch start on piece:', index);
                     const touch = e.touches[0];
                     selectPiece(touch, index);
+                    
+                    // Immediately trigger a drag to show the piece
+                    if (selectedPiece) {
+                        setTimeout(() => {
+                            dragPiece(touch.clientX, touch.clientY);
+                        }, 10);
+                    }
                 }, { passive: false });
             });
             
@@ -334,6 +342,8 @@
         function selectPiece(event, index) {
             if (!pieces[index]) return;
             
+            console.log('Selecting piece', index);
+            
             // Create a copy of the selected piece
             selectedPiece = JSON.parse(JSON.stringify(pieces[index]));
             selectedPieceIndex = index;
@@ -348,15 +358,31 @@
             dragOffsetY = pieceHeight / 2;
             
             // Initialize last position for line clearing logic
-            selectedPiece.lastX = 0;
-            selectedPiece.lastY = 0;
+            selectedPiece.lastX = event.clientX || 0;
+            selectedPiece.lastY = event.clientY || 0;
             
-            // Immediately draw the piece at the cursor/touch position
-            dragPiece(event.clientX, event.clientY);
+            // For touch events, force an immediate redraw
+            const isTouchEvent = event.touches !== undefined || event.changedTouches !== undefined;
+            if (isTouchEvent) {
+                console.log('Touch event detected, forcing immediate redraw');
+                drawBoard();
+                dragPiece(event.clientX, event.clientY);
+            } else {
+                // Immediately draw the piece at the cursor position
+                dragPiece(event.clientX, event.clientY);
+            }
         }
         
         // Drag a piece
         function dragPiece(clientX, clientY) {
+            // Safety check
+            if (!selectedPiece || !selectedPiece.shape) {
+                console.log('No selected piece to drag');
+                return;
+            }
+            
+            console.log(`Dragging piece at ${clientX}, ${clientY}`);
+            
             // Redraw the board
             drawBoard();
             
@@ -384,8 +410,8 @@
                         const drawY = (row + r) * BLOCK_SIZE;
                         
                         // Only draw if inside canvas bounds
-                        if (drawX >= 0 && drawX < gameCanvas.width && 
-                            drawY >= 0 && drawY < gameCanvas.height) {
+                        if (drawX >= -BLOCK_SIZE && drawX < gameCanvas.width + BLOCK_SIZE && 
+                            drawY >= -BLOCK_SIZE && drawY < gameCanvas.height + BLOCK_SIZE) {
                             
                             // Draw with opacity based on validity
                             gameCtx.globalAlpha = validPlacement ? 1.0 : 0.5;
