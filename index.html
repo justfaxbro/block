@@ -2,13 +2,15 @@
 <html>
 <head>
     <title>Simple Block Puzzle</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body {
             background-color: #2c3e50;
             color: white;
             font-family: Arial, sans-serif;
             text-align: center;
+            touch-action: none; /* Prevent browser touch actions */
+            overflow: hidden; /* Prevent scrolling */
         }
         
         #gameBoard {
@@ -16,6 +18,7 @@
             background-color: #34495e;
             margin: 20px auto;
             display: block;
+            touch-action: none; /* Prevent default touch actions on this element */
         }
         
         #piecesArea {
@@ -23,12 +26,14 @@
             display: flex;
             justify-content: space-around;
             max-width: 500px;
+            touch-action: none; /* Prevent default touch actions on piece area */
         }
         
         .pieceCanvas {
             border: 1px solid #7f8c8d;
             background-color: #4a617a;
             display: block;
+            touch-action: none; /* Prevent default touch actions on piece canvases */
         }
         
         #score {
@@ -89,7 +94,12 @@
     </div>
     
     <script>
-        // Game setup
+        // Disable page zooming on mobile
+        document.addEventListener('gesturestart', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+        
+        // Game constants
         const COLS = 8;
         const ROWS = 14; // Increased from 10 to make game area longer
         const BLOCK_SIZE = 30;
@@ -142,19 +152,58 @@
         function init() {
             console.log("Initializing game...");
             
-            // Set up event listeners for pieces
+            // Set up event listeners for pieces - both mouse and touch
             pieceCanvases.forEach((canvas, index) => {
+                // Mouse events
                 canvas.addEventListener('mousedown', e => {
                     handlePieceSelection(e, index);
                 });
+                
+                // Touch events
+                canvas.addEventListener('touchstart', e => {
+                    e.preventDefault(); // Prevent scrolling
+                    const touch = e.touches[0];
+                    handlePieceSelection(touch, index);
+                }, { passive: false });
             });
             
             // Set up event listeners for drag and drop
+            // Mouse events
             gameBoard.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
             
+            // Touch events
+            gameBoard.addEventListener('touchmove', e => {
+                e.preventDefault(); // Prevent scrolling
+                if (selectedPiece) {
+                    const touch = e.touches[0];
+                    handleMouseMove(touch);
+                }
+            }, { passive: false });
+            
+            document.addEventListener('touchend', e => {
+                if (selectedPiece) {
+                    e.preventDefault(); // Prevent any default behavior
+                    const touch = e.changedTouches[0];
+                    handleMouseUp(touch);
+                }
+            }, { passive: false });
+            
+            // Prevent default touch actions on the entire game area
+            document.getElementById('gameBoard').addEventListener('touchmove', e => {
+                e.preventDefault();
+            }, { passive: false });
+            
+            document.getElementById('piecesArea').addEventListener('touchmove', e => {
+                e.preventDefault();
+            }, { passive: false });
+            
             // Set up restart button
             restartButton.addEventListener('click', restartGame);
+            restartButton.addEventListener('touchend', e => {
+                e.preventDefault();
+                restartGame();
+            }, { passive: false });
             
             // Start the game
             restartGame();
@@ -571,6 +620,11 @@
         function updateScore() {
             scoreDisplay.textContent = `Score: ${score}`;
         }
+        
+        // Prevent scrolling on mobile
+        document.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
         
         // Start the game when the page is loaded
         window.addEventListener('load', init);
