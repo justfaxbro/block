@@ -100,8 +100,8 @@
 <script>
     const COLS = 8;
     const ROWS = 10;
-    const BLOCK_SIZE = Math.min(window.innerWidth * 0.8 / COLS, window.innerHeight * 0.4 / ROWS); // Responsive block size
-    const PIECE_CANVAS_SIZE = 4 * BLOCK_SIZE; // Max piece dimension for preview
+    const BLOCK_SIZE = Math.min(window.innerWidth * 0.9 / COLS, window.innerHeight * 0.6 / ROWS); // Increased size
+    const PIECE_CANVAS_SIZE = 4 * BLOCK_SIZE;
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -116,7 +116,7 @@
     const finalScoreDisplay = document.getElementById('finalScore');
 
     function resizeCanvas() {
-        const newBlockSize = Math.min(window.innerWidth * 0.8 / COLS, window.innerHeight * 0.4 / ROWS);
+        const newBlockSize = Math.min(window.innerWidth * 0.9 / COLS, window.innerHeight * 0.6 / ROWS);
         if (newBlockSize !== BLOCK_SIZE) {
             BLOCK_SIZE = newBlockSize;
             PIECE_CANVAS_SIZE = 4 * BLOCK_SIZE;
@@ -140,7 +140,7 @@
     // Handle window resize
     window.addEventListener('resize', resizeCanvas);
     window.addEventListener('orientationchange', () => {
-        setTimeout(resizeCanvas, 100); // Small delay to ensure proper orientation change
+        setTimeout(resizeCanvas, 100);
     });
 
     let board;
@@ -150,6 +150,7 @@
     let selectedPiece = null;
     let selectedPieceIndex = -1;
     let dragOffsetX, dragOffsetY;
+    let lastTouchX, lastTouchY;
 
     const PIECES = [
         { shape: [[1,1,1,1]], color: 'cyan' }, // I
@@ -389,12 +390,12 @@
         // Mouse events
         pCanvas.addEventListener('mousedown', handlePieceSelection);
         // Touch events
-        pCanvas.addEventListener('touchstart', handleTouchStart);
+        pCanvas.addEventListener('touchstart', handleTouchStart, { passive: false });
 
         function handlePieceSelection(e) {
             if (currentPieces[index]) {
-                selectedPiece = JSON.parse(JSON.stringify(currentPieces[index])); // Deep copy
-                selectedPiece.colorAlpha = selectedPiece.color + '80'; // Add alpha for dragging
+                selectedPiece = JSON.parse(JSON.stringify(currentPieces[index]));
+                selectedPiece.colorAlpha = selectedPiece.color + '80';
                 selectedPieceIndex = index;
                 
                 const rect = pCanvas.getBoundingClientRect();
@@ -405,16 +406,18 @@
         }
 
         function handleTouchStart(e) {
-            e.preventDefault(); // Prevent default touch behavior
+            e.preventDefault();
             if (currentPieces[index]) {
-                selectedPiece = JSON.parse(JSON.stringify(currentPieces[index])); // Deep copy
-                selectedPiece.colorAlpha = selectedPiece.color + '80'; // Add alpha for dragging
+                selectedPiece = JSON.parse(JSON.stringify(currentPieces[index]));
+                selectedPiece.colorAlpha = selectedPiece.color + '80';
                 selectedPieceIndex = index;
                 
                 const rect = pCanvas.getBoundingClientRect();
                 const touch = e.touches[0];
                 const touchXInCanvas = touch.clientX - rect.left;
                 const touchYInCanvas = touch.clientY - rect.top;
+                lastTouchX = touch.clientX;
+                lastTouchY = touch.clientY;
                 setupDragOffset(touchXInCanvas, touchYInCanvas, pCanvas);
             }
         }
@@ -440,21 +443,36 @@
     // Mouse move handler
     canvas.addEventListener('mousemove', handleMouseMove);
     // Touch move handler
-    canvas.addEventListener('touchmove', handleTouchMove);
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
 
     function handleMouseMove(e) {
         if (selectedPiece) {
             drawBoard();
-            drawDraggingPiece(selectedPiece, e.clientX - canvas.getBoundingClientRect().left, e.clientY - canvas.getBoundingClientRect().top);
+            const rect = canvas.getBoundingClientRect();
+            drawDraggingPiece(selectedPiece, e.clientX - rect.left, e.clientY - rect.top);
         }
     }
 
     function handleTouchMove(e) {
-        e.preventDefault(); // Prevent scrolling while dragging
+        e.preventDefault();
         if (selectedPiece) {
             const touch = e.touches[0];
-            drawBoard();
-            drawDraggingPiece(selectedPiece, touch.clientX - canvas.getBoundingClientRect().left, touch.clientY - canvas.getBoundingClientRect().top);
+            const rect = canvas.getBoundingClientRect();
+            const touchX = touch.clientX - rect.left;
+            const touchY = touch.clientY - rect.top;
+            
+            // Smooth out the movement
+            if (lastTouchX && lastTouchY) {
+                const deltaX = touch.clientX - lastTouchX;
+                const deltaY = touch.clientY - lastTouchY;
+                if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+                    drawBoard();
+                    drawDraggingPiece(selectedPiece, touchX, touchY);
+                }
+            }
+            
+            lastTouchX = touch.clientX;
+            lastTouchY = touch.clientY;
         }
     }
 
@@ -465,20 +483,22 @@
 
     function handlePiecePlacement(e) {
         if (selectedPiece) {
-            const mainCanvasRect = canvas.getBoundingClientRect();
-            const mouseXOnBoard = e.clientX - mainCanvasRect.left;
-            const mouseYOnBoard = e.clientY - mainCanvasRect.top;
+            const rect = canvas.getBoundingClientRect();
+            const mouseXOnBoard = e.clientX - rect.left;
+            const mouseYOnBoard = e.clientY - rect.top;
             placePieceOnBoard(mouseXOnBoard, mouseYOnBoard);
         }
     }
 
     function handleTouchEnd(e) {
         if (selectedPiece) {
-            const mainCanvasRect = canvas.getBoundingClientRect();
             const touch = e.changedTouches[0];
-            const touchXOnBoard = touch.clientX - mainCanvasRect.left;
-            const touchYOnBoard = touch.clientY - mainCanvasRect.top;
+            const rect = canvas.getBoundingClientRect();
+            const touchXOnBoard = touch.clientX - rect.left;
+            const touchYOnBoard = touch.clientY - rect.top;
             placePieceOnBoard(touchXOnBoard, touchYOnBoard);
+            lastTouchX = null;
+            lastTouchY = null;
         }
     }
 
