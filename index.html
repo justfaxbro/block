@@ -301,93 +301,126 @@
 
     // Event Listeners
     pieceCanvases.forEach((pCanvas, index) => {
-        pCanvas.addEventListener('mousedown', (e) => {
+        // Mouse events
+        pCanvas.addEventListener('mousedown', handlePieceSelection);
+        // Touch events
+        pCanvas.addEventListener('touchstart', handleTouchStart);
+
+        function handlePieceSelection(e) {
             if (currentPieces[index]) {
                 selectedPiece = JSON.parse(JSON.stringify(currentPieces[index])); // Deep copy
                 selectedPiece.colorAlpha = selectedPiece.color + '80'; // Add alpha for dragging
                 selectedPieceIndex = index;
                 
                 const rect = pCanvas.getBoundingClientRect();
-                // Calculate offset from top-left of the piece shape, not just canvas
-                const pieceShape = selectedPiece.shape;
                 const clickXInCanvas = e.clientX - rect.left;
                 const clickYInCanvas = e.clientY - rect.top;
-
-                // Find the block within the piece that was clicked
-                const pBlockSize = BLOCK_SIZE; // Assuming preview uses same block size logic
-                const shapeWidth = pieceShape[0].length * pBlockSize;
-                const shapeHeight = pieceShape.length * pBlockSize;
-                const previewStartX = (PIECE_CANVAS_SIZE - shapeWidth) / 2;
-                const previewStartY = (PIECE_CANVAS_SIZE - shapeHeight) / 2;
-
-                dragOffsetX = clickXInCanvas - previewStartX;
-                dragOffsetY = clickYInCanvas - previewStartY;
-
-                // Ensure offset is relative to the visual blocks
-                dragOffsetX = Math.floor(clickXInCanvas / pBlockSize) * pBlockSize; 
-                dragOffsetY = Math.floor(clickYInCanvas / pBlockSize) * pBlockSize;
-                // Refine: use the center of the clicked block in preview
-                const clickedBlockCol = Math.floor((clickXInCanvas - previewStartX) / BLOCK_SIZE);
-                const clickedBlockRow = Math.floor((clickYInCanvas - previewStartY) / BLOCK_SIZE);
-                dragOffsetX = clickedBlockCol * BLOCK_SIZE + BLOCK_SIZE / 2;
-                dragOffsetY = clickedBlockRow * BLOCK_SIZE + BLOCK_SIZE / 2;
-
-
-                drawBoard(); // Redraw board to clear previous drag artifacts
-                drawDraggingPiece(selectedPiece, e.clientX - canvas.getBoundingClientRect().left, e.clientY - canvas.getBoundingClientRect().top);
-
+                setupDragOffset(clickXInCanvas, clickYInCanvas, pCanvas);
             }
-        });
-    });
+        }
 
-    canvas.addEventListener('mousemove', (e) => {
-        if (selectedPiece) {
-            drawBoard(); // Redraw board
-            // Draw existing pieces on board
-            for (let r_idx = 0; r_idx < currentPieces.length; r_idx++) {
-                if (r_idx !== selectedPieceIndex && currentPieces[r_idx]) {
-                    // This part is tricky; preview pieces shouldn't be on the main board during drag
-                }
+        function handleTouchStart(e) {
+            e.preventDefault(); // Prevent default touch behavior
+            if (currentPieces[index]) {
+                selectedPiece = JSON.parse(JSON.stringify(currentPieces[index])); // Deep copy
+                selectedPiece.colorAlpha = selectedPiece.color + '80'; // Add alpha for dragging
+                selectedPieceIndex = index;
+                
+                const rect = pCanvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                const touchXInCanvas = touch.clientX - rect.left;
+                const touchYInCanvas = touch.clientY - rect.top;
+                setupDragOffset(touchXInCanvas, touchYInCanvas, pCanvas);
             }
-            drawDraggingPiece(selectedPiece, e.clientX - canvas.getBoundingClientRect().left, e.clientY - canvas.getBoundingClientRect().top);
+        }
+
+        function setupDragOffset(xInCanvas, yInCanvas, pCanvas) {
+            const pieceShape = selectedPiece.shape;
+            const pBlockSize = BLOCK_SIZE;
+            const shapeWidth = pieceShape[0].length * pBlockSize;
+            const shapeHeight = pieceShape.length * pBlockSize;
+            const previewStartX = (PIECE_CANVAS_SIZE - shapeWidth) / 2;
+            const previewStartY = (PIECE_CANVAS_SIZE - shapeHeight) / 2;
+
+            const clickedBlockCol = Math.floor((xInCanvas - previewStartX) / BLOCK_SIZE);
+            const clickedBlockRow = Math.floor((yInCanvas - previewStartY) / BLOCK_SIZE);
+            dragOffsetX = clickedBlockCol * BLOCK_SIZE + BLOCK_SIZE / 2;
+            dragOffsetY = clickedBlockRow * BLOCK_SIZE + BLOCK_SIZE / 2;
+
+            drawBoard();
+            drawDraggingPiece(selectedPiece, xInCanvas, yInCanvas);
         }
     });
 
-    document.addEventListener('mouseup', (e) => { // Listen on document to catch mouseup outside canvas
+    // Mouse move handler
+    canvas.addEventListener('mousemove', handleMouseMove);
+    // Touch move handler
+    canvas.addEventListener('touchmove', handleTouchMove);
+
+    function handleMouseMove(e) {
+        if (selectedPiece) {
+            drawBoard();
+            drawDraggingPiece(selectedPiece, e.clientX - canvas.getBoundingClientRect().left, e.clientY - canvas.getBoundingClientRect().top);
+        }
+    }
+
+    function handleTouchMove(e) {
+        e.preventDefault(); // Prevent scrolling while dragging
+        if (selectedPiece) {
+            const touch = e.touches[0];
+            drawBoard();
+            drawDraggingPiece(selectedPiece, touch.clientX - canvas.getBoundingClientRect().left, touch.clientY - canvas.getBoundingClientRect().top);
+        }
+    }
+
+    // Mouse up handler
+    document.addEventListener('mouseup', handlePiecePlacement);
+    // Touch end handler
+    document.addEventListener('touchend', handleTouchEnd);
+
+    function handlePiecePlacement(e) {
         if (selectedPiece) {
             const mainCanvasRect = canvas.getBoundingClientRect();
             const mouseXOnBoard = e.clientX - mainCanvasRect.left;
             const mouseYOnBoard = e.clientY - mainCanvasRect.top;
+            placePieceOnBoard(mouseXOnBoard, mouseYOnBoard);
+        }
+    }
 
-            const col = Math.floor((mouseXOnBoard - (dragOffsetX - BLOCK_SIZE/2)) / BLOCK_SIZE); // Adjust for centering
-            const row = Math.floor((mouseYOnBoard - (dragOffsetY - BLOCK_SIZE/2)) / BLOCK_SIZE);
+    function handleTouchEnd(e) {
+        if (selectedPiece) {
+            const mainCanvasRect = canvas.getBoundingClientRect();
+            const touch = e.changedTouches[0];
+            const touchXOnBoard = touch.clientX - mainCanvasRect.left;
+            const touchYOnBoard = touch.clientY - mainCanvasRect.top;
+            placePieceOnBoard(touchXOnBoard, touchYOnBoard);
+        }
+    }
 
+    function placePieceOnBoard(xOnBoard, yOnBoard) {
+        const col = Math.floor((xOnBoard - (dragOffsetX - BLOCK_SIZE/2)) / BLOCK_SIZE);
+        const row = Math.floor((yOnBoard - (dragOffsetY - BLOCK_SIZE/2)) / BLOCK_SIZE);
 
-            if (canPlace(selectedPiece, row, col)) {
-                placePiece(selectedPiece, row, col);
-                currentPieces[selectedPieceIndex] = null; // Mark as used
-                const linesWereCleared = checkAndClearLines();
-                if (!linesWereCleared && combo > 0) { // If piece placed but no lines cleared, reset combo if it was active
-                    // combo = 0; // checkAndClearLines handles this now
-                }
+        if (canPlace(selectedPiece, row, col)) {
+            placePiece(selectedPiece, row, col);
+            currentPieces[selectedPieceIndex] = null;
+            const linesWereCleared = checkAndClearLines();
 
-                // Check if all pieces are used
-                if (currentPieces.every(p => p === null)) {
-                    generateNewPieces();
-                }
-            }
-
-            selectedPiece = null;
-            selectedPieceIndex = -1;
-            drawBoard();
-            drawPiecePreviews(); // Redraw previews (one might be gone)
-            updateScoreDisplay();
-
-            if (isGameOver()) {
-                handleGameOver();
+            if (currentPieces.every(p => p === null)) {
+                generateNewPieces();
             }
         }
-    });
+
+        selectedPiece = null;
+        selectedPieceIndex = -1;
+        drawBoard();
+        drawPiecePreviews();
+        updateScoreDisplay();
+
+        if (isGameOver()) {
+            handleGameOver();
+        }
+    }
     
     // Initial game start
     startGame();
