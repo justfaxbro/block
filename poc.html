@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Block Puzzle Game</title>
+<style>
+    body { display: flex; flex-direction: column; align-items: center; font-family: Arial, sans-serif; background-color: #2c3e50; color: white; }
+    #gameCanvas { border: 1px solid #ecf0f1; background-color: #34495e; margin-bottom: 20px; }
+    #scoreBoard { font-size: 24px; margin-bottom: 20px; }
+    #piecesContainer { display: flex; justify-content: space-around; width: 300px; }
+    .pieceCanvas { border: 1px solid #7f8c8d; margin: 5px; background-color: #4a617a;}
+    #gameOverScreen {
+        display: none; position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.8);
+        padding: 30px; border-radius: 10px; text-align: center;
+    }
+    #gameOverScreen button { padding: 10px 20px; font-size: 18px; margin-top: 20px; }
+</style>
+</head>
+<body>
+    <h1>Block Blast Clone</h1>
+    <div id="scoreBoard">Score: 0 | Combo: 0</div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="piecesContainer">
+        <canvas class="pieceCanvas" id="pieceCanvas0"></canvas>
+        <canvas class="pieceCanvas" id="pieceCanvas1"></canvas>
+        <canvas class="pieceCanvas" id="pieceCanvas2"></canvas>
+    </div>
+
+    <div id="gameOverScreen">
+        <h2>Game Over!</h2>
+        <p id="finalScore">Final Score: 0</p>
+        <button onclick="startGame()">Play Again</button>
+    </div>
+
+<script>
+    const COLS = 8;
+    const ROWS = 10;
+    const BLOCK_SIZE = 30; // Size of each block in pixels
+    const PIECE_CANVAS_SIZE = 4 * BLOCK_SIZE; // Max piece dimension for preview
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreBoard = document.getElementById('scoreBoard');
+    const pieceCanvases = [
+        document.getElementById('pieceCanvas0'),
+        document.getElementById('pieceCanvas1'),
+        document.getElementById('pieceCanvas2')
+    ];
+    const pieceCtxs = pieceCanvases.map(pc => pc.getContext('2d'));
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const finalScoreDisplay = document.getElementById('finalScore');
+
+
+    canvas.width = COLS * BLOCK_SIZE;
+    canvas.height = ROWS * BLOCK_SIZE;
+    pieceCanvases.forEach(pc => {
+        pc.width = PIECE_CANVAS_SIZE;
+        pc.height = PIECE_CANVAS_SIZE;
+    });
+
+    let board;
+    let score;
+    let combo;
+    let currentPieces = [];
+    let selectedPiece = null;
+    let selectedPieceIndex = -1;
+    let dragOffsetX, dragOffsetY;
+
+    const PIECES = [
+        { shape: [[1,1,1,1]], color: 'cyan' }, // I
+        { shape: [[1,1],[1,1]], color: 'yellow' }, // O
+        { shape: [[1,1,1],[0,1,0]], color: 'purple' }, // T
+        { shape: [[1,1,0],[0,1,1]], color: 'green' }, // S
+        { shape: [[0,1,1],[1,1,0]], color: 'red' },   // Z
+        { shape: [[1,1,1],[1,0,0]], color: 'blue' },  // L
+        { shape: [[1,1,1],[0,0,1]], color: 'orange' } // J
+        // Add more pieces if desired
+    ];
+
+    function getRandomPiece() {
+        const pieceData = PIECES[Math.floor(Math.random() * PIECES.length)];
+        // Simple rotation for variety - 0 to 3 rotations
+        let shape = pieceData.shape;
+        const rotations = Math.floor(Math.random() * 4);
+        for (let r = 0; r < rotations; r++) {
+            shape = rotateMatrix(shape);
+        }
+        return { ...pieceData, shape: shape, id: Date.now() + Math.random() }; // Unique ID for piece
+    }
+
+    function rotateMatrix(matrix) {
+        const rows = matrix.length;
+        const cols = matrix[0].length;
+        const newMatrix = Array(cols).fill(null).map(() => Array(rows).fill(0));
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                newMatrix[c][rows - 1 - r] = matrix[r][c];
+            }
+        }
+        return newMatrix;
+    }
+
+
+    function generateNewPieces() {
+        currentPieces = [];
+        for (let i = 0; i < 3; i++) {
+            currentPieces.push(getRandomPiece());
+        }
+        drawPiecePreviews();
+    }
+
+    function drawBlock(ctxInstance, x, y, color, bSize = BLOCK_SIZE) {
+        ctxInstance.fillStyle = color;
+        ctxInstance.fillRect(x * bSize, y * bSize, bSize, bSize);
+        ctxInstance.strokeStyle = '#2c3e50'; // Darker border for blocks
+        ctxInstance.strokeRect(x * bSize, y * bSize, bSize, bSize);
+    }
+
+    function drawBoard() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (board[r][c]) {
+                    drawBlock(ctx, c, r, board[r][c]);
+                }
+            }
+        }
+    }
+
+    function drawPiecePreviews() {
+        pieceCtxs.forEach((pCtx, index) => {
+            pCtx.clearRect(0, 0, PIECE_CANVAS_SIZE, PIECE_CANVAS_SIZE);
+            if (currentPieces[index]) {
+                const piece = currentPieces[index];
+                const shape = piece.shape;
+                // Center the piece in the preview canvas
+                const shapeWidth = shape[0].length * BLOCK_SIZE;
+                const shapeHeight = shape.length * BLOCK_SIZE;
+                const startX = (PIECE_CANVAS_SIZE - shapeWidth) / 2 / BLOCK_SIZE;
+                const startY = (PIECE_CANVAS_SIZE - shapeHeight) / 2 / BLOCK_SIZE;
+
+                for (let r = 0; r < shape.length; r++) {
+                    for (let c = 0; c < shape[0].length; c++) {
+                        if (shape[r][c]) {
+                            drawBlock(pCtx, startX + c, startY + r, piece.color);
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    function drawDraggingPiece(piece, mouseX, mouseY) {
+        if (!piece) return;
+        const shape = piece.shape;
+        for (let r = 0; r < shape.length; r++) {
+            for (let c = 0; c < shape[0].length; c++) {
+                if (shape[r][c]) {
+                    ctx.fillStyle = piece.colorAlpha || piece.color; // Use semi-transparent if available
+                    ctx.fillRect(mouseX + c * BLOCK_SIZE - dragOffsetX, 
+                                 mouseY + r * BLOCK_SIZE - dragOffsetY, 
+                                 BLOCK_SIZE, BLOCK_SIZE);
+                     ctx.strokeStyle = '#2c3e50';
+                     ctx.strokeRect(mouseX + c * BLOCK_SIZE - dragOffsetX, 
+                                 mouseY + r * BLOCK_SIZE - dragOffsetY, 
+                                 BLOCK_SIZE, BLOCK_SIZE);
+                }
+            }
+        }
+    }
+
+
+    function canPlace(piece, boardRow, boardCol) {
+        const shape = piece.shape;
+        for (let r = 0; r < shape.length; r++) {
+            for (let c = 0; c < shape[0].length; c++) {
+                if (shape[r][c]) {
+                    const bR = boardRow + r;
+                    const bC = boardCol + c;
+                    if (bR < 0 || bR >= ROWS || bC < 0 || bC >= COLS || board[bR][bC]) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    function placePiece(piece, boardRow, boardCol) {
+        const shape = piece.shape;
+        let blocksPlaced = 0;
+        for (let r = 0; r < shape.length; r++) {
+            for (let c = 0; c < shape[0].length; c++) {
+                if (shape[r][c]) {
+                    board[boardRow + r][boardCol + c] = piece.color;
+                    blocksPlaced++;
+                }
+            }
+        }
+        score += blocksPlaced; // 1 point per block
+        return blocksPlaced;
+    }
+
+    function checkAndClearLines() {
+        let linesCleared = 0;
+        let rowsToClear = [];
+        for (let r = 0; r < ROWS; r++) {
+            if (board[r].every(cell => cell !== 0)) {
+                rowsToClear.push(r);
+                linesCleared++;
+            }
+        }
+
+        let colsToClear = [];
+        for (let c = 0; c < COLS; c++) {
+            let colFull = true;
+            for (let r = 0; r < ROWS; r++) {
+                if (board[r][c] === 0) {
+                    colFull = false;
+                    break;
+                }
+            }
+            if (colFull) {
+                colsToClear.push(c);
+                linesCleared++;
+            }
+        }
+        
+        // Clear rows
+        for (const r of rowsToClear) {
+            for (let c = 0; c < COLS; c++) {
+                board[r][c] = 0;
+            }
+        }
+        // Clear columns
+        for (const c of colsToClear) {
+            for (let r = 0; r < ROWS; r++) {
+                board[r][c] = 0;
+            }
+        }
+
+
+        if (linesCleared > 0) {
+            combo++;
+            let lineClearBonus = 0;
+            // Simplified scoring for lines & multi-lines
+            if (linesCleared === 1) lineClearBonus = 10;
+            else if (linesCleared === 2) lineClearBonus = 30;
+            else if (linesCleared === 3) lineClearBonus = 60;
+            else if (linesCleared >= 4) lineClearBonus = 100;
+
+            // Combo bonus (simplified)
+            if (combo > 1) {
+                lineClearBonus += (combo -1) * 10; // e.g. combo 2 adds +10, combo 3 adds +20
+            }
+            score += lineClearBonus;
+            console.log(`Cleared ${linesCleared} lines. Combo: ${combo}. Line Bonus: ${lineClearBonus}`);
+        } else {
+            combo = 0; // Reset combo if no lines cleared
+        }
+        return linesCleared > 0;
+    }
+
+    function updateScoreDisplay() {
+        scoreBoard.textContent = `Score: ${score} | Combo: ${combo}`;
+    }
+
+    function isGameOver() {
+        if (!currentPieces.some(p => p !== null)) return false; // If all pieces are used up, not game over yet until new ones fail
+
+        for (const piece of currentPieces) {
+            if (piece === null) continue; // Skip if piece is already used
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (canPlace(piece, r, c)) {
+                        return false; // Found a valid move
+                    }
+                }
+            }
+        }
+        return true; // No piece can be placed
+    }
+
+    function handleGameOver() {
+        console.log("Game Over!");
+        finalScoreDisplay.textContent = `Final Score: ${score}`;
+        gameOverScreen.style.display = 'block';
+    }
+
+    function startGame() {
+        board = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+        score = 0;
+        combo = 0;
+        selectedPiece = null;
+        selectedPieceIndex = -1;
+        gameOverScreen.style.display = 'none';
+        generateNewPieces();
+        drawBoard();
+        updateScoreDisplay();
+    }
+
+    // Event Listeners
+    pieceCanvases.forEach((pCanvas, index) => {
+        pCanvas.addEventListener('mousedown', (e) => {
+            if (currentPieces[index]) {
+                selectedPiece = JSON.parse(JSON.stringify(currentPieces[index])); // Deep copy
+                selectedPiece.colorAlpha = selectedPiece.color + '80'; // Add alpha for dragging
+                selectedPieceIndex = index;
+                
+                const rect = pCanvas.getBoundingClientRect();
+                // Calculate offset from top-left of the piece shape, not just canvas
+                const pieceShape = selectedPiece.shape;
+                const clickXInCanvas = e.clientX - rect.left;
+                const clickYInCanvas = e.clientY - rect.top;
+
+                // Find the block within the piece that was clicked
+                const pBlockSize = BLOCK_SIZE; // Assuming preview uses same block size logic
+                const shapeWidth = pieceShape[0].length * pBlockSize;
+                const shapeHeight = pieceShape.length * pBlockSize;
+                const previewStartX = (PIECE_CANVAS_SIZE - shapeWidth) / 2;
+                const previewStartY = (PIECE_CANVAS_SIZE - shapeHeight) / 2;
+
+                dragOffsetX = clickXInCanvas - previewStartX;
+                dragOffsetY = clickYInCanvas - previewStartY;
+
+                // Ensure offset is relative to the visual blocks
+                dragOffsetX = Math.floor(clickXInCanvas / pBlockSize) * pBlockSize; 
+                dragOffsetY = Math.floor(clickYInCanvas / pBlockSize) * pBlockSize;
+                // Refine: use the center of the clicked block in preview
+                const clickedBlockCol = Math.floor((clickXInCanvas - previewStartX) / BLOCK_SIZE);
+                const clickedBlockRow = Math.floor((clickYInCanvas - previewStartY) / BLOCK_SIZE);
+                dragOffsetX = clickedBlockCol * BLOCK_SIZE + BLOCK_SIZE / 2;
+                dragOffsetY = clickedBlockRow * BLOCK_SIZE + BLOCK_SIZE / 2;
+
+
+                drawBoard(); // Redraw board to clear previous drag artifacts
+                drawDraggingPiece(selectedPiece, e.clientX - canvas.getBoundingClientRect().left, e.clientY - canvas.getBoundingClientRect().top);
+
+            }
+        });
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (selectedPiece) {
+            drawBoard(); // Redraw board
+            // Draw existing pieces on board
+            for (let r_idx = 0; r_idx < currentPieces.length; r_idx++) {
+                if (r_idx !== selectedPieceIndex && currentPieces[r_idx]) {
+                    // This part is tricky; preview pieces shouldn't be on the main board during drag
+                }
+            }
+            drawDraggingPiece(selectedPiece, e.clientX - canvas.getBoundingClientRect().left, e.clientY - canvas.getBoundingClientRect().top);
+        }
+    });
+
+    document.addEventListener('mouseup', (e) => { // Listen on document to catch mouseup outside canvas
+        if (selectedPiece) {
+            const mainCanvasRect = canvas.getBoundingClientRect();
+            const mouseXOnBoard = e.clientX - mainCanvasRect.left;
+            const mouseYOnBoard = e.clientY - mainCanvasRect.top;
+
+            const col = Math.floor((mouseXOnBoard - (dragOffsetX - BLOCK_SIZE/2)) / BLOCK_SIZE); // Adjust for centering
+            const row = Math.floor((mouseYOnBoard - (dragOffsetY - BLOCK_SIZE/2)) / BLOCK_SIZE);
+
+
+            if (canPlace(selectedPiece, row, col)) {
+                placePiece(selectedPiece, row, col);
+                currentPieces[selectedPieceIndex] = null; // Mark as used
+                const linesWereCleared = checkAndClearLines();
+                if (!linesWereCleared && combo > 0) { // If piece placed but no lines cleared, reset combo if it was active
+                    // combo = 0; // checkAndClearLines handles this now
+                }
+
+                // Check if all pieces are used
+                if (currentPieces.every(p => p === null)) {
+                    generateNewPieces();
+                }
+            }
+
+            selectedPiece = null;
+            selectedPieceIndex = -1;
+            drawBoard();
+            drawPiecePreviews(); // Redraw previews (one might be gone)
+            updateScoreDisplay();
+
+            if (isGameOver()) {
+                handleGameOver();
+            }
+        }
+    });
+    
+    // Initial game start
+    startGame();
+
+</script>
+</body>
+</html>
